@@ -292,10 +292,7 @@ with tab_ml:
                     yaxis_title=features[1],
                     zaxis_title=target,
                     aspectmode="cube",
-                    camera=dict(eye=dict(x=1.8, y=2.1, z=0.65)),
-                    xaxis=dict(title=dict(standoff=12)),
-                    yaxis=dict(title=dict(standoff=18)),
-                    zaxis=dict(title=dict(standoff=12))
+                    camera=dict(eye=dict(x=1.8, y=2.1, z=0.65))
                 ),
                 margin=dict(l=0, r=0, t=60, b=0),
                 updatemenus=[dict(
