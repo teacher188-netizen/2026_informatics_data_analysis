@@ -92,64 +92,23 @@ with tab_data:
     question = st.text_input(
         "무엇을 알아보고 싶나요?",
         value=st.session_state.question,
-        placeholder="예: 주말이고 날씨가 좋으면 서울대공원 입장객수가 많을까?",
+        placeholder="예: 공부 시간이 길면 시험 점수가 높을까?",
         key="question_entry"
     )
     st.session_state.question = question
 
     st.subheader("2. 변수 이름 정하기")
-    st.write("가능한 데이터 유형은 수치형과 범주형 두 가지입니다. 날짜형 데이터와 자유로운 텍스트 데이터는 사용할 수 없습니다.")
-    
-    # 각 변수의 이름과 데이터 유형을 3열로 배치
     n1, n2, n3 = st.columns(3)
-
     with n1:
-        st.markdown("**입력 변수 1**")
-        name_x1 = st.text_input(
-            "속성명",
-            value="입력 변수 1",
-            key="name_x1",
-            label_visibility="visible"
-        )
-        type_x1 = st.radio(
-            "데이터 유형",
-            ["수치형", "범주형"],
-            horizontal=True,
-            key="type_x1"
-        )
-
+        name_x1 = st.text_input("입력 변수 1 이름", value="입력 변수 1", key="name_x1")
     with n2:
-        st.markdown("**입력 변수 2**")
-        name_x2 = st.text_input(
-            "속성명",
-            value="입력 변수 2",
-            key="name_x2",
-            label_visibility="visible"
-        )
-        type_x2 = st.radio(
-            "데이터 유형",
-            ["수치형", "범주형"],
-            horizontal=True,
-            key="type_x2"
-        )
-
+        name_x2 = st.text_input("입력 변수 2 이름", value="입력 변수 2", key="name_x2")
     with n3:
-        st.markdown("**예측 대상**")
-        name_y = st.text_input(
-            "속성명",
-            value="예측 대상",
-            key="name_y",
-            label_visibility="visible"
-        )
-        type_y = st.radio(
-            "데이터 유형",
-            ["수치형", "범주형"],
-            horizontal=True,
-            key="type_y"
-        )
+        name_y = st.text_input("예측 대상 이름", value="예측 대상", key="name_y")
+
+    st.caption("가능한 데이터 유형은 수치형과 범주형 두 가지입니다. 날짜형 데이터와 자유로운 텍스트 데이터는 사용할 수 없습니다.")
 
     names = [name_x1.strip() or "입력 변수 1", name_x2.strip() or "입력 변수 2", name_y.strip() or "예측 대상"]
-    selected_types = [type_x1, type_x2, type_y]
     if len(set(names)) < 3:
         st.warning("세 변수의 이름은 서로 다르게 입력해 주세요.")
 
@@ -209,7 +168,7 @@ with tab_data:
     if df is not None:
         st.subheader("저장된 데이터 미리보기")
         st.caption(st.session_state.source)
-        st.dataframe(df, use_container_width=True)
+        st.table(df)
         st.info(f"**탐구 질문:** {st.session_state.question or '아직 입력하지 않음'}\n\n**입력 변수:** {', '.join(st.session_state.features)}\n\n**예측 대상:** {st.session_state.target}")
 
 with tab_viz:
@@ -223,7 +182,7 @@ with tab_viz:
         c2.metric("열 수", f"{len(df.columns):,}")
         c3.metric("결측치 수", f"{int(df.isna().sum().sum()):,}")
         st.subheader("자료형과 데이터 상태")
-        st.dataframe(type_table(df), use_container_width=True)
+        st.table(type_table(df))
 
         st.subheader("두 변수의 관계")
         cols = df.columns.tolist()
@@ -248,20 +207,20 @@ with tab_viz:
             cat, num = (vb, va) if na else (va, vb)
             summary = pair.groupby(cat, observed=False)[num].agg(["count", "mean", "median"]).sort_values("mean", ascending=False)
             st.write("범주별 수치 비교")
-            st.dataframe(summary, use_container_width=True)
+            st.table(summary)
             st.bar_chart(summary["mean"].head(20))
         else:
             counts = pd.crosstab(pair[va].astype(str), pair[vb].astype(str))
             st.write("범주형 변수 교차표 (빈도)")
-            st.dataframe(counts, use_container_width=True)
+            st.table(counts)
             pct = counts.div(counts.sum(axis=1).replace(0, np.nan), axis=0).mul(100).round(1)
             st.write("행 기준 비율 (%)")
-            st.dataframe(pct, use_container_width=True)
+            st.table(pct)
 
         numeric = df.select_dtypes(include="number")
         st.subheader("숫자형 변수 상관관계")
         if numeric.shape[1] >= 2:
-            st.dataframe(numeric.corr().round(2), use_container_width=True)
+            st.table(numeric.corr().round(2))
         else:
             st.info("숫자형 열이 2개 이상일 때 상관계수 표를 표시합니다.")
 
@@ -319,7 +278,7 @@ with tab_ml:
                     m3.metric("R² (결정계수)", f"{r2:.3f}" if pd.notna(r2) else "계산 불가")
                     result = X_test.copy()
                     result["실제값"], result["예측값"] = y_test.values, np.round(pred, 3)
-                    st.dataframe(result, use_container_width=True)
+                    st.table(result)
                     fig, ax = plt.subplots()
                     ax.scatter(y_test, pred, alpha=0.7)
                     low, high = min(float(y_test.min()), float(np.min(pred))), max(float(y_test.max()), float(np.max(pred)))
@@ -349,7 +308,7 @@ with tab_ml:
                     fig.tight_layout(); st.pyplot(fig)
                     result = X_test.copy()
                     result["실제값"], result["예측값"] = y_test.values, pred
-                    st.dataframe(result, use_container_width=True)
+                    st.table(result)
 
                 st.session_state.result = {"model": model, "features": features, "target": target, "task": task}
                 st.success("모델 학습과 평가가 끝났습니다.")
