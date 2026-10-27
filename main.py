@@ -92,7 +92,7 @@ with tab_data:
     question = st.text_input(
         "무엇을 알아보고 싶나요?",
         value=st.session_state.question,
-        placeholder="예: 공부 시간이 길면 시험 점수가 높을까?",
+        placeholder="예: 주말이고 날씨가 좋으면 서울대공원 입장객수가 많을까?",
         key="question_entry"
     )
     st.session_state.question = question
