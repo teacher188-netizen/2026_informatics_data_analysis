@@ -2,19 +2,20 @@ import io
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import (
     mean_absolute_error, mean_squared_error, r2_score,
     accuracy_score, precision_score, f1_score,
-    confusion_matrix, ConfusionMatrixDisplay
+    confusion_matrix
 )
 
 st.set_page_config(page_title="데이터 탐험실", page_icon="🔎", layout="wide")
@@ -35,16 +36,11 @@ def read_table(file):
 
 
 def prepare_df(df):
+    """모든 데이터 열을 수치형으로 정리합니다."""
     df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
     for col in df.columns:
-        if df[col].dtype == "object":
-            cleaned = df[col].astype(str).str.replace(",", "", regex=False).str.strip()
-            cleaned = cleaned.replace({"": np.nan, "nan": np.nan, "None": np.nan})
-            converted = pd.to_numeric(cleaned, errors="coerce")
-            n = df[col].notna().sum()
-            if n and converted.notna().sum() / n >= 0.85:
-                df[col] = converted
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 
@@ -52,27 +48,16 @@ def type_table(df):
     rows = []
     for c in df.columns:
         s = df[c]
-        kind = "숫자형" if pd.api.types.is_numeric_dtype(s) else "범주형/문자형"
-        rows.append({"열 이름": c, "자료형": kind, "결측치": int(s.isna().sum()),
+        rows.append({"열 이름": c, "자료형": "수치형", "결측치": int(s.isna().sum()),
                      "고유값 수": int(s.nunique(dropna=True))})
     return pd.DataFrame(rows)
 
 
 def make_preprocessor(X):
-    nums = X.select_dtypes(include=["number", "bool"]).columns.tolist()
-    cats = [c for c in X.columns if c not in nums]
-    transformers = []
-    if nums:
-        transformers.append(("num", Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scale", StandardScaler())
-        ]), nums))
-    if cats:
-        transformers.append(("cat", Pipeline([
-            ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore"))
-        ]), cats))
-    return ColumnTransformer(transformers=transformers)
+    return Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scale", StandardScaler())
+    ])
 
 
 for key, default in {
@@ -106,14 +91,14 @@ with tab_data:
     with n3:
         name_y = st.text_input("예측 대상 이름", value="예측 대상", key="name_y")
 
-    st.caption("가능한 데이터 유형은 수치형과 범주형 두 가지입니다. 날짜형 데이터와 자유로운 텍스트 데이터는 사용할 수 없습니다.")
+    st.caption("데이터 유형은 모두 수치형으로 통일합니다. 변수 이름과 탐구 질문은 문자로 작성할 수 있지만, 표의 데이터 값에는 숫자만 입력할 수 있습니다.")
 
     names = [name_x1.strip() or "입력 변수 1", name_x2.strip() or "입력 변수 2", name_y.strip() or "예측 대상"]
     if len(set(names)) < 3:
         st.warning("세 변수의 이름은 서로 다르게 입력해 주세요.")
 
     st.subheader("3. 데이터 직접 입력")
-    st.caption("숫자와 문자 모두 입력할 수 있습니다. 사용하지 않는 행은 비워 두세요. 최소 5개 이상의 완성된 행을 권장합니다.")
+    st.caption("각 칸에는 숫자만 입력하세요. 소수도 입력할 수 있으며, 사용하지 않는 행이나 값이 없는 칸은 비워 둘 수 있습니다. 최소 5개 이상의 데이터 행이 필요합니다.")
 
     if "manual_table" not in st.session_state:
         st.session_state.manual_table = pd.DataFrame({
@@ -136,7 +121,15 @@ with tab_data:
         num_rows="fixed",
         height=620,
         key="manual_data_editor",
-        column_config={name: st.column_config.TextColumn(name, help="이 열의 값을 입력하세요") for name in names}
+        column_config={
+            name: st.column_config.NumberColumn(
+                name,
+                help="숫자만 입력하세요. 소수 입력 가능.",
+                format="%.3f",
+                step=0.1
+            )
+            for name in names
+        }
     )
     st.session_state.manual_table = edited
 
@@ -148,15 +141,16 @@ with tab_data:
         else:
             saved = edited.copy()
             saved.columns = names
-            # 모든 셀이 빈 행은 제외하고, 나머지는 숫자/범주형 자동 판별을 위해 문자열로 정리
-            saved = saved.replace(r"^\s*$", np.nan, regex=True)
-            saved = saved.dropna(how="all")
+            # 빈 행은 제외하고 모든 열을 수치형으로 변환
+            saved = saved.replace(r"^\s*$", np.nan, regex=True).dropna(how="all")
+            saved = prepare_df(saved)
             if len(saved) < 5:
                 st.error("데이터가 입력된 행이 5개 이상 필요합니다.")
             elif saved[names[2]].isna().all():
-                st.error("예측 대상 열에 값을 입력해 주세요.")
+                st.error("예측 대상 열에 숫자를 입력해 주세요.")
+            elif saved[names[:2]].notna().sum().sum() == 0:
+                st.error("입력 변수 열에 숫자를 입력해 주세요.")
             else:
-                saved = prepare_df(saved)
                 st.session_state.df = saved.reset_index(drop=True)
                 st.session_state.source = "직접 입력한 데이터"
                 st.session_state.features = names[:2]
@@ -173,56 +167,62 @@ with tab_data:
 
 with tab_viz:
     st.header("② 데이터 시각화")
+    st.write("두 개의 수치형 변수를 선택해 산점도를 만들고, 두 변수 사이의 피어슨 상관계수를 확인하세요.")
+
     df = st.session_state.df
     if df is None:
-        st.info("먼저 데이터 선정 탭에서 탐구 질문을 입력하고 표에 데이터를 직접 입력한 뒤 저장하세요.")
+        st.info("먼저 데이터 선정 탭에서 탐구 질문을 입력하고 데이터를 저장하세요.")
     else:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("행 수", f"{len(df):,}")
-        c2.metric("열 수", f"{len(df.columns):,}")
-        c3.metric("결측치 수", f"{int(df.isna().sum().sum()):,}")
-        st.subheader("자료형과 데이터 상태")
-        st.table(type_table(df))
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
 
-        st.subheader("두 변수의 관계")
-        cols = df.columns.tolist()
-        a, b = st.columns(2)
-        with a:
-            va = st.selectbox("변수 A", cols, key="viz_a")
-        with b:
-            vb = st.selectbox("변수 B", [x for x in cols if x != va], key="viz_b")
-        na = pd.api.types.is_numeric_dtype(df[va])
-        nb = pd.api.types.is_numeric_dtype(df[vb])
-        pair = df[[va, vb]].dropna()
-
-        if na and nb:
-            fig, ax = plt.subplots()
-            ax.scatter(pair[va], pair[vb], alpha=0.65)
-            ax.set_xlabel(va); ax.set_ylabel(vb); ax.set_title(f"{va}와 {vb}")
-            fig.tight_layout(); st.pyplot(fig)
-            corr = pair[va].corr(pair[vb])
-            st.metric("피어슨 상관계수", f"{corr:.3f}" if pd.notna(corr) else "계산 불가")
-            st.caption("상관관계가 인과관계를 의미하지는 않습니다.")
-        elif na != nb:
-            cat, num = (vb, va) if na else (va, vb)
-            summary = pair.groupby(cat, observed=False)[num].agg(["count", "mean", "median"]).sort_values("mean", ascending=False)
-            st.write("범주별 수치 비교")
-            st.table(summary)
-            st.bar_chart(summary["mean"].head(20))
+        if len(numeric_cols) < 2:
+            st.warning("산점도를 만들려면 숫자로 된 변수가 최소 2개 필요합니다. 데이터 선정 탭에서 수치형 데이터를 입력하고 저장하세요.")
         else:
-            counts = pd.crosstab(pair[va].astype(str), pair[vb].astype(str))
-            st.write("범주형 변수 교차표 (빈도)")
-            st.table(counts)
-            pct = counts.div(counts.sum(axis=1).replace(0, np.nan), axis=0).mul(100).round(1)
-            st.write("행 기준 비율 (%)")
-            st.table(pct)
+            controls1, controls2 = st.columns(2)
+            with controls1:
+                x_col = st.selectbox("X축 변수", numeric_cols, index=0, key="scatter_x")
+            y_options = [col for col in numeric_cols if col != x_col]
+            with controls2:
+                default_y = 0
+                y_col = st.selectbox("Y축 변수", y_options, index=default_y, key="scatter_y")
 
-        numeric = df.select_dtypes(include="number")
-        st.subheader("숫자형 변수 상관관계")
-        if numeric.shape[1] >= 2:
-            st.table(numeric.corr().round(2))
-        else:
-            st.info("숫자형 열이 2개 이상일 때 상관계수 표를 표시합니다.")
+            pair = df[[x_col, y_col]].replace([np.inf, -np.inf], np.nan).dropna()
+            chart_col, stats_col = st.columns([3, 1], gap="large")
+
+            with chart_col:
+                if len(pair) < 2:
+                    st.warning("선택한 두 변수에 값이 모두 있는 행이 2개 이상 필요합니다.")
+                else:
+                    fig = px.scatter(
+                        pair,
+                        x=x_col,
+                        y=y_col,
+                        title=f"{x_col}와 {y_col}의 산점도",
+                        labels={x_col: x_col, y_col: y_col},
+                        hover_data={x_col: True, y_col: True},
+                    )
+                    fig.update_layout(height=520, margin=dict(l=20, r=20, t=60, b=20))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption(f"그래프에 표시된 데이터: {len(pair)}개 행 (결측치가 있는 행 제외)")
+
+            with stats_col:
+                st.subheader("상관계수")
+                if len(pair) < 2 or pair[x_col].nunique() < 2 or pair[y_col].nunique() < 2:
+                    st.metric("피어슨 r", "계산 불가")
+                    st.caption("유효한 데이터가 2개 이상이고 각 변수의 값이 다양해야 계산할 수 있습니다.")
+                else:
+                    corr = pair[x_col].corr(pair[y_col], method="pearson")
+                    st.metric("피어슨 r", f"{corr:.3f}")
+                    if corr > 0:
+                        direction = "양의 상관관계"
+                    elif corr < 0:
+                        direction = "음의 상관관계"
+                    else:
+                        direction = "선형 상관관계가 거의 없음"
+                    st.write(f"**방향:** {direction}")
+                    st.caption("상관계수는 -1부터 1 사이입니다. 절댓값이 1에 가까울수록 선형 관계가 강하고, 0에 가까울수록 선형 관계가 약합니다.")
+                st.divider()
+                st.caption("상관관계가 있다고 해서 한 변수가 다른 변수의 원인이라는 뜻은 아닙니다.")
 
 with tab_ml:
     st.header("③ 기계학습")
@@ -239,10 +239,10 @@ with tab_ml:
             st.info(f"탐구 질문: {st.session_state.question}")
 
         y_series = df[target]
-        guess_reg = pd.api.types.is_numeric_dtype(y_series) and y_series.nunique(dropna=True) > 10
+        guess_reg = y_series.nunique(dropna=True) > 10
         task = st.radio("예측 유형", ["회귀", "분류"], horizontal=True,
                         index=0 if guess_reg else 1,
-                        help="회귀는 숫자 값을, 분류는 범주를 예측합니다.")
+                        help="모든 데이터는 수치형입니다. 회귀는 연속적인 숫자 값을, 분류는 숫자로 표시된 종류/등급을 예측합니다.")
         if task == "회귀":
             model_name = st.selectbox("모델", ["랜덤 포레스트 회귀", "선형 회귀"])
         else:
@@ -253,9 +253,8 @@ with tab_ml:
             try:
                 work = df[features + [target]].replace([np.inf, -np.inf], np.nan).dropna(subset=[target]).copy()
                 X, y = work[features].copy(), work[target].copy()
-                for col in X.columns:
-                    if pd.api.types.is_datetime64_any_dtype(X[col]):
-                        X[col] = X[col].astype(str)
+                # 입력 데이터는 모두 수치형으로 처리합니다.
+                X = X.apply(pd.to_numeric, errors="coerce")
 
                 if task == "회귀":
                     y = pd.to_numeric(y, errors="coerce")
@@ -279,14 +278,24 @@ with tab_ml:
                     result = X_test.copy()
                     result["실제값"], result["예측값"] = y_test.values, np.round(pred, 3)
                     st.table(result)
-                    fig, ax = plt.subplots()
-                    ax.scatter(y_test, pred, alpha=0.7)
-                    low, high = min(float(y_test.min()), float(np.min(pred))), max(float(y_test.max()), float(np.max(pred)))
-                    ax.plot([low, high], [low, high], linestyle="--")
-                    ax.set_xlabel("실제값"); ax.set_ylabel("예측값"); ax.set_title("실제값과 예측값")
-                    fig.tight_layout(); st.pyplot(fig)
+                    plot_df = pd.DataFrame({"실제값": y_test.to_numpy(), "예측값": pred})
+                    fig = px.scatter(
+                        plot_df, x="실제값", y="예측값",
+                        title="실제값과 예측값 비교",
+                        hover_data={"실제값": ":.3f", "예측값": ":.3f"}
+                    )
+                    low = min(float(y_test.min()), float(np.min(pred)))
+                    high = max(float(y_test.max()), float(np.max(pred)))
+                    fig.add_trace(go.Scatter(
+                        x=[low, high], y=[low, high], mode="lines",
+                        name="완벽한 예측 기준선", line={"dash": "dash"}
+                    ))
+                    fig.update_layout(xaxis_title="실제값", yaxis_title="예측값")
+                    st.plotly_chart(fig, use_container_width=True)
                 else:
-                    y = y.astype(str)
+                    y = pd.to_numeric(y, errors="coerce")
+                    valid = y.notna()
+                    X, y = X.loc[valid], y.loc[valid]
                     if y.nunique() < 2:
                         st.error("분류에는 예측 대상 범주가 최소 2개 필요합니다.")
                         st.stop()
@@ -303,9 +312,18 @@ with tab_ml:
                     m2.metric("정밀도 (macro)", f"{precision_score(y_test, pred, average='macro', zero_division=0):.3f}")
                     m3.metric("F1 (macro)", f"{f1_score(y_test, pred, average='macro', zero_division=0):.3f}")
                     labels = sorted(pd.Series(y_test).astype(str).unique())
-                    fig, ax = plt.subplots(figsize=(6, 4))
-                    ConfusionMatrixDisplay(confusion_matrix(y_test, pred, labels=labels), display_labels=labels).plot(ax=ax, xticks_rotation=45, colorbar=False)
-                    fig.tight_layout(); st.pyplot(fig)
+                    cm = confusion_matrix(y_test, pred, labels=labels)
+                    cm_df = pd.DataFrame(cm, index=labels, columns=labels)
+                    fig = px.imshow(
+                        cm_df,
+                        text_auto=True,
+                        aspect="auto",
+                        labels={"x": "예측값", "y": "실제값", "color": "개수"},
+                        title="혼동 행렬",
+                        color_continuous_scale="Blues"
+                    )
+                    fig.update_xaxes(side="bottom")
+                    st.plotly_chart(fig, use_container_width=True)
                     result = X_test.copy()
                     result["실제값"], result["예측값"] = y_test.values, pred
                     st.table(result)
@@ -323,14 +341,14 @@ with tab_ml:
             new_values = {}
             input_cols = st.columns(len(result_info["features"]))
             for i, col in enumerate(result_info["features"]):
-                s = df[col]
+                s = pd.to_numeric(df[col], errors="coerce")
                 with input_cols[i]:
-                    if pd.api.types.is_numeric_dtype(s):
-                        default = pd.to_numeric(s, errors="coerce").median()
-                        new_values[col] = st.number_input(col, value=float(default) if pd.notna(default) else 0.0, key=f"new_{col}")
-                    else:
-                        options = s.dropna().astype(str).unique().tolist()[:200]
-                        new_values[col] = st.selectbox(col, options, key=f"new_{col}") if options else st.text_input(col, key=f"new_{col}")
+                    default = s.median()
+                    new_values[col] = st.number_input(
+                        col,
+                        value=float(default) if pd.notna(default) else 0.0,
+                        key=f"new_{col}"
+                    )
             if st.button("새로운 값 예측하기"):
                 try:
                     new_df = pd.DataFrame([new_values], columns=result_info["features"])
@@ -340,4 +358,4 @@ with tab_ml:
                     st.error(f"예측에 실패했습니다: {e}")
 
 st.divider()
-st.caption("수업용 탐구 도구입니다. 관계가 있다고 해서 인과관계가 증명되는 것은 아닙니다.")
+st.caption("수업용 탐구 도구입니다. 데이터 값은 모두 수치형으로 입력합니다. 관계가 있다고 해서 인과관계가 증명되는 것은 아닙니다.")
