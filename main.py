@@ -85,98 +85,95 @@ for key, default in {
 tab_data, tab_viz, tab_ml = st.tabs(["① 데이터 선정", "② 데이터 시각화", "③ 기계학습"])
 
 with tab_data:
-    st.header("① 데이터 선정")
-    st.write("입력 데이터 2개와 예측 대상 데이터 1개를 준비하세요.")
-    mode = st.radio("데이터 준비 방식",
-                    ["세 변수가 한 파일에 있음", "서로 다른 파일 3개 연결"],
-                    horizontal=True)
+    st.header("① 데이터 입력 및 질문 설정")
+    st.write("아래 표에 데이터를 직접 입력하세요. 관측 사례 20개, 변수 3개로 구성되어 있습니다.")
 
-    loaded_df, source = None, ""
+    st.subheader("1. 탐구 질문")
+    question = st.text_input(
+        "무엇을 알아보고 싶나요?",
+        value=st.session_state.question,
+        placeholder="예: 공부 시간이 길면 시험 점수가 높을까?",
+        key="question_entry"
+    )
+    st.session_state.question = question
 
-    if mode == "세 변수가 한 파일에 있음":
-        f = st.file_uploader("CSV 또는 Excel 파일", type=["csv", "xlsx", "xls"], key="onefile")
-        if f:
-            try:
-                loaded_df = prepare_df(read_table(f))
-                source = f"파일: {f.name}"
-            except Exception as e:
-                st.error(f"파일을 읽을 수 없습니다: {e}")
-    else:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            f1 = st.file_uploader("파일 1 (입력 변수 후보)", type=["csv", "xlsx", "xls"], key="f1")
-        with c2:
-            f2 = st.file_uploader("파일 2 (입력 변수 후보)", type=["csv", "xlsx", "xls"], key="f2")
-        with c3:
-            f3 = st.file_uploader("파일 3 (예측 대상 후보)", type=["csv", "xlsx", "xls"], key="f3")
+    st.subheader("2. 변수 이름 정하기")
+    n1, n2, n3 = st.columns(3)
+    with n1:
+        name_x1 = st.text_input("입력 변수 1 이름", value="입력 변수 1", key="name_x1")
+    with n2:
+        name_x2 = st.text_input("입력 변수 2 이름", value="입력 변수 2", key="name_x2")
+    with n3:
+        name_y = st.text_input("예측 대상 이름", value="예측 대상", key="name_y")
 
-        if f1 and f2 and f3:
-            try:
-                d1, d2, d3 = [prepare_df(read_table(f)) for f in (f1, f2, f3)]
-                common = sorted(set(d1.columns) & set(d2.columns) & set(d3.columns))
-                if not common:
-                    st.error("세 파일에 공통 열이 없습니다. 날짜, 지역 코드, 영화 코드 등 연결 기준이 필요합니다.")
-                else:
-                    key = st.selectbox("세 파일을 연결할 공통 열", common)
-                    if st.button("세 파일 연결하기", type="primary"):
-                        def rename_cols(d, prefix):
-                            return d.rename(columns={c: f"{prefix}__{c}" for c in d.columns if c != key})
-                        merged = rename_cols(d1, "데이터1").merge(rename_cols(d2, "데이터2"), on=key, how="inner")
-                        merged = merged.merge(rename_cols(d3, "데이터3"), on=key, how="inner")
-                        merged = merged.rename(columns={key: "연결키"})
-                        st.session_state.df = merged
-                        st.session_state.source = f"{f1.name}, {f2.name}, {f3.name} 연결"
-                        st.session_state.result = None
-                        st.success(f"연결 완료: {len(merged):,}행")
-                        st.rerun()
-            except Exception as e:
-                st.error(f"파일 연결 중 오류: {e}")
+    names = [name_x1.strip() or "입력 변수 1", name_x2.strip() or "입력 변수 2", name_y.strip() or "예측 대상"]
+    if len(set(names)) < 3:
+        st.warning("세 변수의 이름은 서로 다르게 입력해 주세요.")
 
-    if loaded_df is not None:
-        st.session_state.df = loaded_df
-        st.session_state.source = source
-        st.session_state.result = None
+    st.subheader("3. 데이터 직접 입력")
+    st.caption("숫자와 문자 모두 입력할 수 있습니다. 사용하지 않는 행은 비워 두세요. 최소 5개 이상의 완성된 행을 권장합니다.")
+
+    if "manual_table" not in st.session_state:
+        st.session_state.manual_table = pd.DataFrame({
+            "입력 변수 1": [""] * 20,
+            "입력 변수 2": [""] * 20,
+            "예측 대상": [""] * 20,
+        })
+
+    # 이름을 바꾼 경우에도 기존에 입력한 값은 열 순서대로 유지
+    old_table = st.session_state.manual_table
+    if list(old_table.columns) != names:
+        old_table = old_table.copy()
+        old_table.columns = names
+        st.session_state.manual_table = old_table
+
+    edited = st.data_editor(
+        st.session_state.manual_table,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        height=620,
+        key="manual_data_editor",
+        column_config={name: st.column_config.TextColumn(name, help="이 열의 값을 입력하세요") for name in names}
+    )
+    st.session_state.manual_table = edited
+
+    if st.button("입력 데이터 저장하기", type="primary"):
+        if not st.session_state.question.strip():
+            st.error("먼저 탐구 질문을 입력해 주세요.")
+        elif len(set(names)) < 3:
+            st.error("세 변수의 이름은 서로 다르게 입력해 주세요.")
+        else:
+            saved = edited.copy()
+            saved.columns = names
+            # 모든 셀이 빈 행은 제외하고, 나머지는 숫자/범주형 자동 판별을 위해 문자열로 정리
+            saved = saved.replace(r"^\s*$", np.nan, regex=True)
+            saved = saved.dropna(how="all")
+            if len(saved) < 5:
+                st.error("데이터가 입력된 행이 5개 이상 필요합니다.")
+            elif saved[names[2]].isna().all():
+                st.error("예측 대상 열에 값을 입력해 주세요.")
+            else:
+                saved = prepare_df(saved)
+                st.session_state.df = saved.reset_index(drop=True)
+                st.session_state.source = "직접 입력한 데이터"
+                st.session_state.features = names[:2]
+                st.session_state.target = names[2]
+                st.session_state.result = None
+                st.success(f"저장 완료: {len(saved)}행 × {len(saved.columns)}열")
 
     df = st.session_state.df
-    if df is None:
-        st.info("데이터 파일을 업로드하세요. 처음에는 세 변수가 한 표에 들어 있는 파일을 권장합니다.")
-    else:
-        st.success(f"현재 데이터: {len(df):,}행 × {len(df.columns):,}열")
+    if df is not None:
+        st.subheader("저장된 데이터 미리보기")
         st.caption(st.session_state.source)
-        st.dataframe(df.head(10), use_container_width=True)
-
-        st.subheader("탐구 질문 만들기")
-        st.session_state.question = st.text_input(
-            "‘~이면 ~일까?’ 형태로 작성하세요.",
-            value=st.session_state.question,
-            placeholder="예: 스크린 수와 상영 기간을 알면 최종 관객 수를 예측할 수 있을까?"
-        )
-        cols = df.columns.tolist()
-        if len(cols) < 3:
-            st.warning("입력 변수 2개와 예측 대상 1개를 선택하려면 열이 최소 3개 필요합니다.")
-        else:
-            a, b, c = st.columns(3)
-            with a:
-                x1 = st.selectbox("입력 변수 1 (~이면)", cols, key="sel_x1")
-            with b:
-                x2 = st.selectbox("입력 변수 2 (~이면)", [x for x in cols if x != x1], key="sel_x2")
-            with c:
-                y = st.selectbox("예측 대상 (~일까?)", [x for x in cols if x not in (x1, x2)], key="sel_y")
-            st.session_state.features = [x1, x2]
-            st.session_state.target = y
-            if st.button("질문과 변수 저장", type="primary"):
-                if not st.session_state.question.strip():
-                    st.warning("탐구 질문을 먼저 작성하세요.")
-                else:
-                    st.session_state.result = None
-                    st.success("저장했습니다. 데이터 시각화 탭으로 이동하세요.")
-            st.info(f"**현재 구조**\n\n입력 변수: {x1}, {x2}\n\n예측 대상: {y}")
+        st.dataframe(df, use_container_width=True)
+        st.info(f"**탐구 질문:** {st.session_state.question or '아직 입력하지 않음'}\n\n**입력 변수:** {', '.join(st.session_state.features)}\n\n**예측 대상:** {st.session_state.target}")
 
 with tab_viz:
     st.header("② 데이터 시각화")
     df = st.session_state.df
     if df is None:
-        st.info("먼저 데이터 선정 탭에서 파일을 업로드하세요.")
+        st.info("먼저 데이터 선정 탭에서 탐구 질문을 입력하고 표에 데이터를 직접 입력한 뒤 저장하세요.")
     else:
         c1, c2, c3 = st.columns(3)
         c1.metric("행 수", f"{len(df):,}")
@@ -229,9 +226,9 @@ with tab_ml:
     st.header("③ 기계학습")
     df = st.session_state.df
     if df is None:
-        st.info("먼저 데이터 선정 탭에서 파일을 업로드하세요.")
+        st.info("먼저 데이터 선정 탭에서 탐구 질문을 입력하고 표에 데이터를 직접 입력한 뒤 저장하세요.")
     elif len(st.session_state.features) != 2 or st.session_state.target is None:
-        st.info("데이터 선정 탭에서 입력 변수 2개와 예측 대상을 선택하세요.")
+        st.info("데이터 선정 탭에서 세 열에 데이터를 입력하고 저장하세요.")
     else:
         features, target = st.session_state.features, st.session_state.target
         st.write(f"**입력 변수:** {features[0]}, {features[1]}")
