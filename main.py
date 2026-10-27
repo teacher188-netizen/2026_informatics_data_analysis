@@ -100,16 +100,56 @@ with tab_data:
     st.subheader("2. 변수 이름 정하기")
     st.write("가능한 데이터 유형은 수치형과 범주형 두 가지입니다. 날짜형 데이터와 자유로운 텍스트 데이터는 사용할 수 없습니다.")
     
-    n1, n2 = st.rows(2)
+    # 각 변수의 이름과 데이터 유형을 3열로 배치
+    n1, n2, n3 = st.columns(3)
+
     with n1:
-        name_x1 = st.text_input("입력 변수 1 이름", value="입력 변수 1", key="name_x1")
+        st.markdown("**입력 변수 1**")
+        name_x1 = st.text_input(
+            "속성명",
+            value="입력 변수 1",
+            key="name_x1",
+            label_visibility="visible"
+        )
+        type_x1 = st.radio(
+            "데이터 유형",
+            ["수치형", "범주형"],
+            horizontal=True,
+            key="type_x1"
+        )
+
     with n2:
-        data_type = st.radio("데이터 유형", ["수치형", "범주형"], horizontal=True)
-        name_x2 = st.text_input("입력 변수 2 이름", value="입력 변수 2", key="name_x2")
-    #with n3:
-        #name_y = st.text_input("예측 대상 이름", value="예측 대상", key="name_y")
+        st.markdown("**입력 변수 2**")
+        name_x2 = st.text_input(
+            "속성명",
+            value="입력 변수 2",
+            key="name_x2",
+            label_visibility="visible"
+        )
+        type_x2 = st.radio(
+            "데이터 유형",
+            ["수치형", "범주형"],
+            horizontal=True,
+            key="type_x2"
+        )
+
+    with n3:
+        st.markdown("**예측 대상**")
+        name_y = st.text_input(
+            "속성명",
+            value="예측 대상",
+            key="name_y",
+            label_visibility="visible"
+        )
+        type_y = st.radio(
+            "데이터 유형",
+            ["수치형", "범주형"],
+            horizontal=True,
+            key="type_y"
+        )
 
     names = [name_x1.strip() or "입력 변수 1", name_x2.strip() or "입력 변수 2", name_y.strip() or "예측 대상"]
+    selected_types = [type_x1, type_x2, type_y]
     if len(set(names)) < 3:
         st.warning("세 변수의 이름은 서로 다르게 입력해 주세요.")
 
