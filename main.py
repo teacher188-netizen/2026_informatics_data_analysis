@@ -98,6 +98,7 @@ with tab_data:
     st.session_state.question = question
 
     st.subheader("2. 변수 이름 정하기")
+    st.write("가능한 데이터 유형은 수치형과 범주형 두 가지입니다. 날짜형 데이터와 자유로운 텍스트 데이터는 사용할 수 없습니다.")
     n1, n2, n3 = st.columns(3)
     with n1:
         name_x1 = st.text_input("입력 변수 1 이름", value="입력 변수 1", key="name_x1")
