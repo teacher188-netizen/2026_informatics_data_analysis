@@ -102,9 +102,9 @@ with tab_data:
 
     if "manual_table" not in st.session_state:
         st.session_state.manual_table = pd.DataFrame({
-            "입력 변수 1": [""] * 20,
-            "입력 변수 2": [""] * 20,
-            "예측 대상": [""] * 20,
+            "입력 변수 1": [""] * 10,
+            "입력 변수 2": [""] * 10,
+            "예측 대상": [""] * 10,
         })
 
     # 이름을 바꾼 경우에도 기존에 입력한 값은 열 순서대로 유지
