@@ -209,7 +209,7 @@ with tab_ml:
         st.write(
             f"점 하나는 실제 데이터 한 행을 뜻합니다. 평면은 두 입력 변수 "
             f"({features[0]}, {features[1]})로 예측 대상({target})을 추정합니다. "
-            "애니메이션을 재생하면 예측 오차가 작아지도록 평면이 이동하는 과정을 볼 수 있습니다."
+            "애니메이션을 재생하면 예측 오차가 작아지도록 평면이 이동하는 과정을 천천히 관찰할 수 있습니다. 한 프레임은 약 0.45초이며 전체 과정은 약 27초입니다."
         )
 
         animation_data = df[features + [target]].replace(
@@ -263,8 +263,8 @@ with tab_ml:
             )
 
             frames = []
-            total_steps = 80
-            learning_rate = 0.12
+            total_steps = 120
+            learning_rate = 0.08
             for step in range(1, total_steps + 1):
                 prediction_scaled = X_aug @ beta
                 gradient = (2 / len(y_scaled)) * (X_aug.T @ (prediction_scaled - y_scaled))
@@ -291,7 +291,11 @@ with tab_ml:
                     xaxis_title=features[0],
                     yaxis_title=features[1],
                     zaxis_title=target,
-                    aspectmode="cube"
+                    aspectmode="cube",
+                    camera=dict(eye=dict(x=1.8, y=2.1, z=0.65)),
+                    xaxis=dict(title=dict(standoff=12)),
+                    yaxis=dict(title=dict(standoff=18)),
+                    zaxis=dict(title=dict(standoff=12))
                 ),
                 margin=dict(l=0, r=0, t=60, b=0),
                 updatemenus=[dict(
@@ -299,7 +303,7 @@ with tab_ml:
                     x=0.02, y=1.08,
                     buttons=[
                         dict(label="▶ 재생", method="animate", args=[None, {
-                            "frame": {"duration": 120, "redraw": True},
+                            "frame": {"duration": 450, "redraw": True},
                             "transition": {"duration": 0},
                             "fromcurrent": True,
                             "mode": "immediate"
@@ -312,7 +316,7 @@ with tab_ml:
                     ]
                 )]
             )
-            fig3d.update_scenes(camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)))
+            fig3d.update_scenes(camera=dict(eye=dict(x=1.8, y=2.1, z=0.65)))
             st.plotly_chart(fig3d, use_container_width=True)
             st.caption(
                 "빨간 점은 실제 데이터, 색이 있는 평면은 모델의 예측값입니다. "
