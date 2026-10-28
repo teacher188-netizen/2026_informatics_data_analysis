@@ -3,6 +3,8 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+import json
+from streamlit_local_storage import LocalStorage
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
@@ -11,6 +13,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 st.set_page_config(page_title="데이터 탐험실", page_icon="🔎", layout="wide")
 st.title("🔎 데이터 탐험실")
 st.caption("탐구 질문 만들기 → 수치 데이터 살펴보기 → 선형 회귀로 예측하기")
+
+# 브라우저 로컬 저장소: 같은 브라우저에서 새로고침해도 입력 내용 복원
+local_storage = LocalStorage()
 
 for key, default in {
     "df": None,
@@ -22,6 +27,25 @@ for key, default in {
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
+
+# 최초 실행 시 브라우저에 남아 있는 임시 저장 데이터를 복원
+if "local_backup_loaded" not in st.session_state:
+    st.session_state.local_backup_loaded = True
+    try:
+        backup_raw = local_storage.getItem("data_explorer_backup")
+        if backup_raw and isinstance(backup_raw, str):
+            backup = json.loads(backup_raw)
+            st.session_state.question = backup.get("question", "")
+            st.session_state.name_x1 = backup.get("name_x1", "입력 변수 1")
+            st.session_state.name_x2 = backup.get("name_x2", "입력 변수 2")
+            st.session_state.name_y = backup.get("name_y", "예측 대상")
+            table_records = backup.get("manual_table", [])
+            table_columns = backup.get("manual_columns", ["입력 변수 1", "입력 변수 2", "예측 대상"])
+            if table_records:
+                st.session_state.manual_table = pd.DataFrame(table_records, columns=table_columns)
+    except Exception:
+        # 저장 데이터가 없거나 읽을 수 없어도 앱 사용은 계속 가능
+        pass
 
 
 tab_data, tab_viz, tab_ml = st.tabs([
@@ -44,11 +68,11 @@ with tab_data:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        name_x1 = st.text_input("입력 변수 1 이름", value="입력 변수 1", key="name_x1")
+        name_x1 = st.text_input("입력 변수 1 이름", value=st.session_state.get("name_x1", "입력 변수 1"), key="name_x1")
     with c2:
-        name_x2 = st.text_input("입력 변수 2 이름", value="입력 변수 2", key="name_x2")
+        name_x2 = st.text_input("입력 변수 2 이름", value=st.session_state.get("name_x2", "입력 변수 2"), key="name_x2")
     with c3:
-        name_y = st.text_input("예측 대상 이름", value="예측 대상", key="name_y")
+        name_y = st.text_input("예측 대상 이름", value=st.session_state.get("name_y", "예측 대상"), key="name_y")
 
     names = [
         name_x1.strip() or "입력 변수 1",
@@ -92,6 +116,20 @@ with tab_data:
     )
     st.session_state.manual_table = edited
 
+    # 입력할 때마다 브라우저 로컬 저장소에 임시 저장
+    try:
+        backup_payload = {
+            "question": question,
+            "name_x1": name_x1,
+            "name_x2": name_x2,
+            "name_y": name_y,
+            "manual_columns": names,
+            "manual_table": edited.where(pd.notna(edited), None).to_dict(orient="records"),
+        }
+        local_storage.setItem("data_explorer_backup", json.dumps(backup_payload, ensure_ascii=False))
+    except Exception:
+        st.caption("자동 임시 저장을 사용할 수 없습니다. 아래 CSV 다운로드 버튼으로 파일을 저장해 주세요.")
+
     if st.button("데이터 저장하기", type="primary"):
         if not question.strip():
             st.error("먼저 탐구 질문을 입력해 주세요.")
@@ -124,6 +162,23 @@ with tab_data:
             f"**입력 변수:** {', '.join(st.session_state.features)}\n\n"
             f"**예측 대상:** {st.session_state.target}"
         )
+
+    st.divider()
+    st.subheader("📥 과제 제출용 CSV 저장")
+    st.write("입력한 데이터와 탐구 질문을 CSV 파일로 저장한 뒤, Google 클래스룸의 해당 과제에 업로드하세요.")
+    export_table = edited.copy()
+    export_table.columns = names
+    export_table = export_table.where(pd.notna(export_table), "")
+    export_csv = export_table.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="CSV 다운로드",
+        data=export_csv,
+        file_name="데이터_탐험실_입력데이터.csv",
+        mime="text/csv",
+        type="primary",
+        use_container_width=True,
+    )
+    st.caption("제출 순서: ① CSV 다운로드 → ② Google 클래스룸에서 해당 과제 열기 → ③ 파일 첨부 후 제출")
 
 with tab_viz:
     st.header("② 데이터 시각화")
