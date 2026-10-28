@@ -83,9 +83,9 @@ with tab_data:
         column_config={
             name: st.column_config.NumberColumn(
                 name,
-                help="숫자만 입력하세요. 소수 입력 가능.",
+                help="숫자만 입력하세요. 소수점 셋째자리까지 입력 가능.",
                 format="%.3f",
-                step=0.1,
+                step=0.001,
             )
             for name in names
         },
@@ -181,10 +181,10 @@ with tab_viz:
             height=180,
             placeholder=(
                 f"1. {st.session_state.features[0] if st.session_state.features else '입력 변수 1'}와 "
-                f"{st.session_state.target or '예측 대상'}은 어떤 관계인가요?\n"
+                f"{st.session_state.target or '예측 대상'}은 어떤 관계인가요? 양의 상관관계/음의 상관관계, 상관계수를 적고 연관성이 깊은지 적은지 작성합니다.\n"
                 f"2. {st.session_state.features[1] if len(st.session_state.features) > 1 else '입력 변수 2'}와 "
-                f"{st.session_state.target or '예측 대상'}은 어떤 관계인가요?\n"
-                "3. 두 입력 변수 사이에도 관계가 있나요?\n"
+                f"{st.session_state.target or '예측 대상'}은 어떤 관계인가요? 양의 상관관계/음의 상관관계, 상관계수를 적고 연관성이 깊은지 적은지 작성합니다.\n"
+                "3. 두 입력 변수 사이에도 관계가 있나요? 양의 상관관계/음의 상관관계, 상관계수를 적고 연관성이 깊은지 적은지 작성합니다.\n"
                 "4. 그래프와 상관계수를 근거로 그렇게 생각한 이유를 적어 보세요."
             ),
         )
